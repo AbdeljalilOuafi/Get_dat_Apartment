@@ -5,7 +5,21 @@
 import requests
 from bs4 import BeautifulSoup
 import time
-import pprint
+from urllib.parse import quote
+
+# URL = "https://trouverunlogement.lescrous.fr/tools/41/search?bounds=3.8070597_43.6533542_3.9413208_43.5667088"
+URL = "https://github.com/AbdeljalilOuafi"
+STRINGS = ["CITE COLOMBIERE",
+        "RESIDENCE MINERVE",
+        "RESIDENCE DU POUS DE LAS SERS",
+        "CITE VOIE DOMITIENNE",
+        "CITE VERT BOIS",
+        "RESIDENCE LA LYRE",
+        "CITE TRIOLET",
+        "Ouafi"]
+USER = {"username":"@Callmeouafi"}
+
+
 
 def check_website_for_strings(target_url, strings_to_find, max_attempts=5, cooldown_seconds=10):
     """
@@ -24,7 +38,6 @@ def check_website_for_strings(target_url, strings_to_find, max_attempts=5, coold
     attempts = 0
     while attempts < max_attempts:
         try:
-            print(f"Attempt {attempts + 1} of {max_attempts}: Fetching {target_url}...")
             # Set a user-agent to mimic a real browser
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -56,26 +69,49 @@ def check_website_for_strings(target_url, strings_to_find, max_attempts=5, coold
                 return {}
     return {}
 
-# --- Example Usage ---
-if __name__ == "__main__":
 
-    while True:
-        URL = "https://trouverunlogement.lescrous.fr/tools/41/search?bounds=3.8070597_43.6533542_3.9413208_43.5667088"
-
-        STRINGS = ["CITE COLOMBIERE",
-                "RESIDENCE MINERVE",
-                "RESIDENCE DU POUS DE LAS SERS",
-                "CITE VOIE DOMITIENNE",
-                "CITE VERT BOIS",
-                "RESIDENCE LA LYRE",
-                "CITE TRIOLET"]
+def call_user_on_telegram(user={}, keyword=""):
+    try:
+        parsed_message = f"An apartment was found at {keyword}.".replace(" ", "+")
         
-        found_strings = check_website_for_strings(URL, STRINGS)
+        response = requests.get(f"http://api.callmebot.com/start.php?user={user["username"]}&text={parsed_message}&lang=en-GB-Standard-B&rpt=2")
+        response.raise_for_status()
+        
+        print(response.text)
+        return response.text
+    except requests.exceptions.RequestException as e:
+        print(f"An error occured while calling user: {e}")
+        return False
 
+
+def send_message_telegram(user={}, keyword=""):
+    try:
+        message = f"An apartment was found at {keyword}."
+        encoded_message = quote(message)
+        print(encoded_message)
+        
+        response = requests.get(f"https://api.callmebot.com/text.php?user={user["username"]}&text={encoded_message}")
+        response.raise_for_status()
+        
+        print(response.text)
+        return response.text
+    except Exception as e:
+        print(f"An error accured while sending a message to the user...\n{e}")
+        return
+
+
+if __name__ == "__main__":
+    while True:
+        found_strings = check_website_for_strings(URL, STRINGS)
         if found_strings:
-            print("\n--- Search Results ---")
             for string, found in found_strings.items():
-                print(f"'{string}': {'Found' if found else 'Not Found'}")
-            print("--------------------")
+                if found:
+                    page_content = call_user_on_telegram(USER, string)
+                    if isinstance(page_content, bool) or "Script ended before Timeout." in page_content:
+                        res = send_message_telegram(USER, string)
+                        if "Successful" in res:
+                            print("Message sent to the user successfully.")
+                            break
         else:
             print("Script failed to retrieve and parse the website.")
+        time.sleep(1)
