@@ -3,8 +3,9 @@
 
 import configparser
 import requests
-from bs4 import BeautifulSoup
+import random
 import time
+from bs4 import BeautifulSoup
 from urllib.parse import quote
 
 config = configparser.ConfigParser()
@@ -102,6 +103,7 @@ def send_message_telegram(user={}, keyword=""):
 
 if __name__ == "__main__":
     while True:
+        
         found_strings = check_website_for_strings(URL, STRINGS)
         if found_strings:
             for string, found in found_strings.items():
@@ -120,5 +122,13 @@ if __name__ == "__main__":
                         break
         else:
             print("Script failed to retrieve and parse the website.")
+
+        # 95% of the time, wait between 2-5 seconds
+        if random.random() < 0.95:
+            sleep_time = random.uniform(2, 5)
+        # 5% of the time, simulate a longer pause (e.g., "reading" the page)
+        else:
+            sleep_time = random.uniform(7, 15)
             
-        time.sleep(2)
+        print(f"Waiting for {sleep_time:.2f} seconds before the next check...")
+        time.sleep(sleep_time)
