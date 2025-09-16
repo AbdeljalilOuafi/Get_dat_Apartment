@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """main module"""
 
-
+import configparser
 import requests
 from bs4 import BeautifulSoup
 import time
 from urllib.parse import quote
 
-# URL = "https://trouverunlogement.lescrous.fr/tools/41/search?bounds=3.8070597_43.6533542_3.9413208_43.5667088"
-URL = "https://github.com/AbdeljalilOuafi"
-STRINGS = ["CITE COLOMBIERE",
-        "RESIDENCE MINERVE",
-        "RESIDENCE DU POUS DE LAS SERS",
-        "CITE VOIE DOMITIENNE",
-        "CITE VERT BOIS",
-        "RESIDENCE LA LYRE",
-        "CITE TRIOLET",
-        "Ouafi"]
-USER = {"username":"@Callmeouafi"}
+config = configparser.ConfigParser()
+config.read('config.ini')
 
+# Configuration
+URL = config.get("scraper", "url")
+keywords_str = config.get("scraper", "keywords")
+
+STRINGS = [kw.strip() for kw in keywords_str.split(",")]
+
+USER = config.get("telegram", "username")
+
+TOTAL_REQUESTS = 0
 
 
 def check_website_for_strings(target_url, strings_to_find, max_attempts=5, cooldown_seconds=10):
@@ -36,6 +36,8 @@ def check_website_for_strings(target_url, strings_to_find, max_attempts=5, coold
               Returns an empty dictionary on failure after all attempts.
     """
     attempts = 0
+    global TOTAL_REQUESTS
+    
     while attempts < max_attempts:
         try:
             # Set a user-agent to mimic a real browser
@@ -55,7 +57,8 @@ def check_website_for_strings(target_url, strings_to_find, max_attempts=5, coold
 
             # Check for the presence of each string
             results = {s: s.lower() in page_text for s in strings_to_find}
-            print("Search complete.")
+            TOTAL_REQUESTS += 1
+            print(f"Search complete. ({TOTAL_REQUESTS})")
             return results
 
         except requests.exceptions.RequestException as e:
@@ -77,7 +80,6 @@ def call_user_on_telegram(user={}, keyword=""):
         response = requests.get(f"http://api.callmebot.com/start.php?user={user["username"]}&text={parsed_message}&lang=en-GB-Standard-B&rpt=2")
         response.raise_for_status()
         
-        print(response.text)
         return response.text
     except requests.exceptions.RequestException as e:
         print(f"An error occured while calling user: {e}")
@@ -88,16 +90,14 @@ def send_message_telegram(user={}, keyword=""):
     try:
         message = f"An apartment was found at {keyword}."
         encoded_message = quote(message)
-        print(encoded_message)
         
         response = requests.get(f"https://api.callmebot.com/text.php?user={user["username"]}&text={encoded_message}")
         response.raise_for_status()
         
-        print(response.text)
         return response.text
     except Exception as e:
         print(f"An error accured while sending a message to the user...\n{e}")
-        return
+        return "Failed"
 
 
 if __name__ == "__main__":
@@ -106,12 +106,19 @@ if __name__ == "__main__":
         if found_strings:
             for string, found in found_strings.items():
                 if found:
+                    # Call the user on Telegram
                     page_content = call_user_on_telegram(USER, string)
+                    
+                    # If calling fails, send a text message instead
                     if isinstance(page_content, bool) or "Script ended before Timeout." in page_content:
                         res = send_message_telegram(USER, string)
                         if "Successful" in res:
                             print("Message sent to the user successfully.")
                             break
+                    else:
+                        print("User called successfully on Telegram.")
+                        break
         else:
             print("Script failed to retrieve and parse the website.")
-        time.sleep(1)
+            
+        time.sleep(2)
